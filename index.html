@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Picture Pieces</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Picture Pieces">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#17515c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+  /* Layout idea: a puzzle table. Setup is one scrolling column of paper cards on felt;
+     play is one screen: wooden board first, loose pieces in the space that remains.
+     Single theme by choice: the felt table. */
+  :root {
+    color-scheme: dark;
+    --felt: #17515c;
+    --felt-deep: #0f3c45;
+    --paper: #fff8e8;
+    --ink: #10323a;
+    --sun: #ffc93c;
+    --coral: #ff7a59;
+    --wood: #e2bd84;
+    --display: "Fredoka", "Trebuchet MS", "Avenir Next", sans-serif;
+    --body: "Nunito", "Avenir Next", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--felt);
+    background-image: radial-gradient(circle at 30% 0%, #1f6b78 0%, var(--felt) 55%, var(--felt-deep) 100%);
+    color: var(--paper);
+    font-family: var(--body);
+    font-weight: 600;
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
+  }
+  button, .btn { font: inherit; color: inherit; cursor: pointer; border: 0; }
+  button:focus-visible, .btn:focus-within, .chip:focus-visible, .style:focus-visible {
+    outline: 3px solid var(--coral); outline-offset: 2px;
+  }
+  [hidden] { display: none !important; }
+
+  /* ---------- Setup ---------- */
+  #setup { height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .col { max-width: 560px; margin: 0 auto; padding: 18px 16px 28px; display: flex; flex-direction: column; gap: 16px; }
+  h1 { font-family: var(--display); font-weight: 700; font-size: 30px; line-height: 1.1; margin: 0; text-wrap: balance; }
+  .sub { margin: 4px 0 0; opacity: .85; font-size: 15px; }
+  .frame {
+    position: relative; background: var(--wood); border-radius: 18px; padding: 10px;
+    box-shadow: 0 8px 0 rgba(0,0,0,.18), inset 0 0 0 2px rgba(255,255,255,.25);
+    display: flex; justify-content: center;
+  }
+  #preview { display: block; max-width: 100%; max-height: 38vh; border-radius: 10px; background: #0003; }
+  .busy {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    background: var(--ink); color: var(--paper); padding: 8px 16px; border-radius: 999px;
+    font-family: var(--display); font-size: 16px;
+  }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn, .pill {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 48px; padding: 0 18px; border-radius: 14px;
+    font-family: var(--display); font-weight: 600; font-size: 17px;
+  }
+  .btn.main { background: var(--sun); color: var(--ink); box-shadow: 0 4px 0 #c9951a; flex: 1 1 200px; }
+  .btn.main:active { transform: translateY(2px); box-shadow: 0 2px 0 #c9951a; }
+  .pill { background: rgba(255,248,232,.14); color: var(--paper); box-shadow: inset 0 0 0 2px rgba(255,248,232,.35); }
+  .btn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  h2 { font-family: var(--display); font-weight: 600; font-size: 18px; margin: 0 0 8px; }
+  .styles { display: flex; gap: 10px; overflow-x: auto; padding: 4px 2px 8px; -webkit-overflow-scrolling: touch; }
+  .style {
+    flex: 0 0 auto; width: 88px; padding: 6px 6px 4px; border-radius: 14px;
+    background: rgba(255,248,232,.12); color: var(--paper);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    font-family: var(--display); font-size: 14px;
+  }
+  .style canvas { width: 76px; height: 60px; border-radius: 8px; background: #0003; display: block; }
+  .style[aria-pressed="true"] { background: var(--sun); color: var(--ink); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    min-width: 52px; min-height: 48px; padding: 0 12px; border-radius: 14px;
+    background: rgba(255,248,232,.12); color: var(--paper);
+    font-family: var(--display); font-size: 19px; font-variant-numeric: tabular-nums;
+  }
+  .chip[aria-pressed="true"] { background: var(--sun); color: var(--ink); }
+  #start { background: var(--coral); color: #fff; box-shadow: 0 5px 0 #c24e31; font-size: 22px; min-height: 60px; width: 100%; }
+  #start:active { transform: translateY(3px); box-shadow: 0 2px 0 #c24e31; }
+  .note { font-size: 13.5px; opacity: .8; margin: 0; line-height: 1.4; }
+  #msg { background: var(--paper); color: var(--ink); padding: 10px 14px; border-radius: 12px; font-size: 15px; }
+
+  /* ---------- Play ---------- */
+  #play { height: 100%; display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; flex-wrap: wrap; background: rgba(0,0,0,.18); }
+  .bar .pill { min-height: 42px; padding: 0 10px; font-size: 14px; }
+  .bar { flex-wrap: nowrap; gap: 6px; padding: 8px; }
+  #count { white-space: nowrap; font-size: 15px; }
+  #count { margin-left: auto; font-family: var(--display); font-size: 17px; font-variant-numeric: tabular-nums; padding: 0 4px; }
+  #stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; touch-action: none; }
+  #board {
+    position: absolute; background: var(--wood); border-radius: 6px; z-index: 0;
+    box-shadow: 0 0 0 8px var(--wood), 0 0 0 10px rgba(0,0,0,.2), 0 10px 0 8px rgba(0,0,0,.16), inset 0 0 0 2px rgba(0,0,0,.18);
+  }
+  #board canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .22; transition: opacity .5s; border-radius: 4px; }
+  #board.noguide canvas { opacity: 0; }
+  #board.done { z-index: 50; }
+  #board.done canvas { opacity: 1; }
+  .piece { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
+  .piece.snap { transition: transform .16s ease-out; }
+  .piece.drag { filter: drop-shadow(0 6px 5px rgba(0,0,0,.4)); }
+  #confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 90; }
+  #win {
+    position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 100;
+    background: var(--paper); color: var(--ink); border-radius: 20px; padding: 14px 16px;
+    width: min(92%, 380px); text-align: center; box-shadow: 0 8px 0 rgba(0,0,0,.2);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  #win strong { font-family: var(--display); font-size: 28px; }
+  #win .pill { background: var(--ink); color: var(--paper); box-shadow: none; flex: 1; }
+  @media (prefers-reduced-motion: reduce) { .piece.snap, #board canvas { transition: none; } }
+</style>
+</head>
+<body>
+
+<main id="setup">
+  <div class="col">
+    <header>
+      <h1>Picture Pieces</h1>
+      <p class="sub">Turn any photo into a jigsaw puzzle.</p>
+    </header>
+
+    <div class="frame">
+      <canvas id="preview" width="400" height="300" aria-label="Puzzle picture preview"></canvas>
+      <div class="busy" id="busy" hidden>Painting…</div>
+    </div>
+
+    <div class="row">
+      <label class="btn main">Choose a picture
+        <input type="file" id="file" accept="image/*">
+      </label>
+      <button class="pill" id="sample" type="button">Sample truck</button>
+    </div>
+    <div id="msg" role="alert" hidden></div>
+
+    <section>
+      <h2>Style</h2>
+      <div class="styles" id="styles"></div>
+    </section>
+
+    <section>
+      <h2>Pieces</h2>
+      <div class="chips" id="chips"></div>
+    </section>
+
+    <button class="btn" id="start" type="button">Start puzzle</button>
+    <p class="note">Your picture stays on this device. All picture styles are made here in the browser. Nothing is uploaded.</p>
+  </div>
+</main>
+
+<main id="play" hidden>
+  <div class="bar">
+    <button class="pill" id="back" type="button">‹ Back</button>
+    <button class="pill" id="guide" type="button">Guide on</button>
+    <button class="pill" id="mix" type="button">Mix up</button>
+    <button class="pill" id="sound" type="button">Sound on</button>
+    <span id="count" aria-live="polite">0 / 0</span>
+  </div>
+  <div id="stage">
+    <div id="board"><canvas id="ghost"></canvas></div>
+    <canvas id="confetti"></canvas>
+    <div id="win" hidden>
+      <strong>You did it!</strong>
+      <div class="row">
+        <button class="pill" id="again" type="button">Play again</button>
+        <button class="pill" id="newpic" type="button">New picture</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var WORK_MAX = 900;
+  var COUNTS = [2, 4, 6, 9, 12, 16, 20, 30, 48, 80];
+  var STYLES = [
+    ["photo", "Photo"], ["simple", "Simple"], ["cartoon", "Cartoon"], ["dots", "Dots"],
+    ["mosaic", "Mosaic"], ["sketch", "Sketch"], ["pop", "Pop"]
+  ];
+
+  /* ---------- saved choices (this device only) ---------- */
+  var prefs = { pieces: 6, style: "photo", sound: true, guide: true };
+  try { var saved = JSON.parse(localStorage.getItem("picture-pieces") || "{}"); for (var k in saved) if (k in prefs) prefs[k] = saved[k]; } catch (e) {}
+  function save() { try { localStorage.setItem("picture-pieces", JSON.stringify(prefs)); } catch (e) {} }
+  if (COUNTS.indexOf(prefs.pieces) < 0) prefs.pieces = 6;
+  if (!STYLES.some(function (s) { return s[0] === prefs.style; })) prefs.style = "photo";
+
+  /* ---------- canvas helpers ---------- */
+  function mk(w, h) { var c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; }
+  function pixels(c) { return c.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, c.width, c.height); }
+  function scaled(c, maxSide) {
+    var k = Math.min(1, maxSide / Math.max(c.width, c.height));
+    var o = mk(c.width * k, c.height * k), x = o.getContext("2d");
+    x.imageSmoothingQuality = "high"; x.drawImage(c, 0, 0, o.width, o.height); return o;
+  }
+  function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
+
+  function boxBlur(px, w, h, r, passes) {
+    r = Math.round(r);
+    var a = new Uint8ClampedArray(px);
+    if (r < 1) return a;
+    var b = new Uint8ClampedArray(px.length), div = 2 * r + 1, x, y, ch, sum, base, p;
+    for (p = 0; p < passes; p++) {
+      for (y = 0; y < h; y++) for (ch = 0; ch < 3; ch++) {
+        base = y * w * 4 + ch; sum = 0;
+        for (x = -r; x <= r; x++) sum += a[base + clamp(x, 0, w - 1) * 4];
+        for (x = 0; x < w; x++) {
+          b[base + x * 4] = sum / div;
+          sum += a[base + Math.min(w - 1, x + r + 1) * 4] - a[base + Math.max(0, x - r) * 4];
+        }
+      }
+      for (x = 0; x < w; x++) for (ch = 0; ch < 3; ch++) {
+        base = x * 4 + ch; sum = 0;
+        for (y = -r; y <= r; y++) sum += b[base + clamp(y, 0, h - 1) * w * 4];
+        for (y = 0; y < h; y++) {
+          a[base + y * w * 4] = sum / div;
+          sum += b[base + Math.min(h - 1, y + r + 1) * w * 4] - b[base + Math.max(0, y - r) * w * 4];
+        }
+      }
+    }
+    for (var i = 3; i < a.length; i += 4) a[i] = 255;
+    return a;
+  }
+
+  /* ---------- finding the main colors of a picture ---------- */
+  function d2(a, b) { var x = a[0] - b[0], y = a[1] - b[1], z = a[2] - b[2]; return x * x + y * y + z * z; }
+  function kmeans(px, k) {
+    var n = px.length / 4, step = Math.max(1, Math.floor(n / 5000)), S = [], i, j, it;
+    for (i = 0; i < n; i += step) S.push([px[i * 4], px[i * 4 + 1], px[i * 4 + 2]]);
+    var C = [S[S.length >> 1].slice()];
+    while (C.length < k) {
+      var best = -1, bi = 0;
+      for (i = 0; i < S.length; i++) {
+        var d = 1e12;
+        for (j = 0; j < C.length; j++) { var e = d2(S[i], C[j]); if (e < d) d = e; }
+        if (d > best) { best = d; bi = i; }
+      }
+      C.push(S[bi].slice());
+    }
+    for (it = 0; it < 8; it++) {
+      var sum = C.map(function () { return [0, 0, 0, 0]; });
+      for (i = 0; i < S.length; i++) {
+        var bj = 0, bd = 1e12;
+        for (j = 0; j < k; j++) { var dd = d2(S[i], C[j]); if (dd < bd) { bd = dd; bj = j; } }
+        sum[bj][0] += S[i][0]; sum[bj][1] += S[i][1]; sum[bj][2] += S[i][2]; sum[bj][3]++;
+      }
+      for (j = 0; j < k; j++) if (sum[j][3]) C[j] = [sum[j][0] / sum[j][3], sum[j][1] / sum[j][3], sum[j][2] / sum[j][3]];
+    }
+    return C;
+  }
+  function modeFilter(lab, w, h, k, r) {
+    var out = new Uint8Array(lab.length), cnt = new Uint16Array(k), x, y, dx, dy, j;
+    for (y = 0; y < h; y++) for (x = 0; x < w; x++) {
+      cnt.fill(0);
+      for (dy = -r; dy <= r; dy++) { var yy = clamp(y + dy, 0, h - 1) * w; for (dx = -r; dx <= r; dx++) cnt[lab[yy + clamp(x + dx, 0, w - 1)]]++; }
+      var b = 0; for (j = 1; j < k; j++) if (cnt[j] > cnt[b]) b = j;
+      out[y * w + x] = b;
+    }
+    return out;
+  }
+  function vivid(c, amt, lift) {
+    var g = (c[0] + c[1] + c[2]) / 3;
+    return [0, 1, 2].map(function (i) { return clamp(g + (c[i] - g) * amt + lift, 0, 255); });
+  }
+
+  /* ---------- styles ---------- */
+  // Simple / Cartoon: find the picture's main colors, merge small details into large flat shapes.
+  function simplify(src, k, outline) {
+    var W = src.width, H = src.height, U = Math.max(W, H);
+    var small = scaled(src, 220), w = small.width, h = small.height;
+    var px = boxBlur(pixels(small).data, w, h, Math.max(1, Math.round(w / 110)), 2);
+    var pal = kmeans(px, k), lab = new Uint8Array(w * h), i, j;
+    for (i = 0; i < w * h; i++) {
+      var p = [px[i * 4], px[i * 4 + 1], px[i * 4 + 2]], bj = 0, bd = 1e12;
+      for (j = 0; j < k; j++) { var d = d2(p, pal[j]); if (d < bd) { bd = d; bj = j; } }
+      lab[i] = bj;
+    }
+    var r = outline ? 1 : 2;
+    lab = modeFilter(modeFilter(lab, w, h, k, r), w, h, k, r);
+
+    // Enlarge each color area on its own, then keep the strongest one per pixel: smooth, clean edges.
+    var full = new Uint8Array(W * H), score = new Uint8Array(W * H);
+    var mc = mk(w, h), mx = mc.getContext("2d"), md = mx.createImageData(w, h);
+    var fc = mk(W, H), fx = fc.getContext("2d", { willReadFrequently: true });
+    fx.imageSmoothingEnabled = true; fx.imageSmoothingQuality = "high";
+    for (j = 0; j < k; j++) {
+      for (i = 0; i < w * h; i++) { var v = lab[i] === j ? 255 : 0; md.data[i * 4] = v; md.data[i * 4 + 1] = v; md.data[i * 4 + 2] = v; md.data[i * 4 + 3] = 255; }
+      md.data.set(boxBlur(md.data, w, h, 1, 2));
+      mx.putImageData(md, 0, 0);
+      fx.drawImage(mc, 0, 0, W, H);
+      var fd = fx.getImageData(0, 0, W, H).data;
+      for (i = 0; i < W * H; i++) { var s = fd[i * 4]; if (s > score[i]) { score[i] = s; full[i] = j; } }
+    }
+    var bright = pal.map(function (c) { return vivid(c, outline ? 1.3 : 1.45, outline ? 6 : 12); });
+    var out = fx.createImageData(W, H), o = out.data;
+    var t = Math.max(1, Math.round(U / 300));
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+      i = y * W + x; var c = bright[full[i]], edge = false;
+      if (outline) edge = (x + t < W && full[i] !== full[i + t]) || (y + t < H && full[i] !== full[i + t * W]);
+      if (edge) { o[i * 4] = 38; o[i * 4 + 1] = 30; o[i * 4 + 2] = 46; }
+      else { o[i * 4] = c[0]; o[i * 4 + 1] = c[1]; o[i * 4 + 2] = c[2]; }
+      o[i * 4 + 3] = 255;
+    }
+    fx.putImageData(out, 0, 0);
+    return fc;
+  }
+
+  // Pointillism: three layers of paint dots, large to small, each with the color under it.
+  function dots(src) {
+    var W = src.width, H = src.height, U = Math.max(W, H), d = pixels(src).data;
+    var o = mk(W, H), x = o.getContext("2d");
+    x.fillStyle = "#f4ecd9"; x.fillRect(0, 0, W, H);
+    [[U / 70, 1.45], [U / 110, 1.3], [U / 165, 1.2]].forEach(function (L) {
+      var r = Math.max(1.2, L[0]), step = r * L[1];
+      for (var y = 0; y < H + step; y += step) for (var xx = 0; xx < W + step; xx += step) {
+        var px = xx + (Math.random() - .5) * step, py = y + (Math.random() - .5) * step;
+        var i = (clamp(Math.round(py), 0, H - 1) * W + clamp(Math.round(px), 0, W - 1)) * 4;
+        var c = vivid([d[i], d[i + 1], d[i + 2]], 1.35, 0), j = 22;
+        x.fillStyle = "rgb(" + Math.round(clamp(c[0] + (Math.random() - .5) * j, 0, 255)) + "," +
+          Math.round(clamp(c[1] + (Math.random() - .5) * j, 0, 255)) + "," + Math.round(clamp(c[2] + (Math.random() - .5) * j, 0, 255)) + ")";
+        x.beginPath(); x.arc(px, py, r * (.8 + Math.random() * .4), 0, 6.2832); x.fill();
+      }
+    });
+    return o;
+  }
+
+  function mosaic(src) {
+    var W = src.width, H = src.height, U = Math.max(W, H), tile = Math.max(3, U / 34);
+    var cols = Math.ceil(W / tile), rows = Math.ceil(H / tile);
+    var sm = mk(cols, rows), sx = sm.getContext("2d", { willReadFrequently: true });
+    sx.imageSmoothingQuality = "high"; sx.drawImage(src, 0, 0, cols, rows);
+    var d = sx.getImageData(0, 0, cols, rows).data, o = mk(W, H), x = o.getContext("2d");
+    x.fillStyle = "#ece4d2"; x.fillRect(0, 0, W, H);
+    var gap = Math.max(.6, tile * .09), tw = W / cols, th = H / rows;
+    for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+      var i = (r * cols + c) * 4, v = (Math.random() - .5) * 26, col = vivid([d[i], d[i + 1], d[i + 2]], 1.2, v);
+      x.fillStyle = "rgb(" + Math.round(col[0]) + "," + Math.round(col[1]) + "," + Math.round(col[2]) + ")";
+      x.beginPath();
+      if (x.roundRect) x.roundRect(c * tw + gap / 2, r * th + gap / 2, tw - gap, th - gap, tile * .18);
+      else x.rect(c * tw + gap / 2, r * th + gap / 2, tw - gap, th - gap);
+      x.fill();
+    }
+    return o;
+  }
+
+  function sketch(src) {
+    var W = src.width, H = src.height, U = Math.max(W, H), im = pixels(src), d = im.data, n = W * H, i;
+    var inv = new Uint8ClampedArray(d.length);
+    for (i = 0; i < n; i++) { var g = d[i * 4] * .3 + d[i * 4 + 1] * .59 + d[i * 4 + 2] * .11; inv[i * 4] = inv[i * 4 + 1] = inv[i * 4 + 2] = 255 - g; inv[i * 4 + 3] = 255; }
+    var bl = boxBlur(inv, W, H, Math.max(1, U / 70), 2);
+    for (i = 0; i < n; i++) {
+      var gr = 255 - inv[i * 4], v = Math.min(255, gr * 255 / (256 - bl[i * 4]));
+      v = Math.pow(v / 255, 2.2);
+      d[i * 4] = 44 + (250 - 44) * v; d[i * 4 + 1] = 46 + (246 - 46) * v; d[i * 4 + 2] = 62 + (236 - 62) * v;
+    }
+    var o = mk(W, H); o.getContext("2d").putImageData(im, 0, 0); return o;
+  }
+
+  function pop(src) {
+    var W = src.width, H = src.height, U = Math.max(W, H), im = pixels(src), n = W * H, i;
+    var d = boxBlur(im.data, W, H, Math.max(1, U / 220), 1), hist = new Uint32Array(256), lum = new Uint8Array(n);
+    for (i = 0; i < n; i++) { lum[i] = d[i * 4] * .3 + d[i * 4 + 1] * .59 + d[i * 4 + 2] * .11; hist[lum[i]]++; }
+    var cuts = [], acc = 0, q = 1;
+    for (i = 0; i < 256 && q < 4; i++) { acc += hist[i]; while (q < 4 && acc >= n * q / 4) { cuts.push(i); q++; } }
+    var P = [[29, 43, 100], [230, 57, 139], [255, 210, 63], [255, 246, 224]];
+    for (i = 0; i < n; i++) {
+      var b = lum[i] <= cuts[0] ? 0 : lum[i] <= cuts[1] ? 1 : lum[i] <= cuts[2] ? 2 : 3;
+      im.data[i * 4] = P[b][0]; im.data[i * 4 + 1] = P[b][1]; im.data[i * 4 + 2] = P[b][2];
+    }
+    var o = mk(W, H); o.getContext("2d").putImageData(im, 0, 0); return o;
+  }
+
+  var FILTERS = {
+    photo: function (c) { return c; },
+    simple: function (c) { return simplify(c, 7, false); },
+    cartoon: function (c) { return simplify(c, 12, true); },
+    dots: dots, mosaic: mosaic, sketch: sketch, pop: pop
+  };
+
+  /* ---------- sample picture (drawn here, no file needed) ---------- */
+  function drawSample() {
+    var c = mk(1200, 900), x = c.getContext("2d");
+    var g = x.createLinearGradient(0, 0, 0, 640); g.addColorStop(0, "#6cc5f2"); g.addColorStop(1, "#d6f1ff");
+    x.fillStyle = g; x.fillRect(0, 0, 1200, 900);
+    x.fillStyle = "#ffd84a"; x.beginPath(); x.arc(1010, 150, 82, 0, 7); x.fill();
+    x.fillStyle = "#fff";
+    [[210, 150, 90], [300, 130, 70], [150, 170, 60], [640, 110, 60], [710, 125, 48]].forEach(function (b) { x.beginPath(); x.ellipse(b[0], b[1], b[2], b[2] * .55, 0, 0, 7); x.fill(); });
+    x.fillStyle = "#57b368"; x.beginPath(); x.ellipse(300, 700, 560, 220, 0, 0, 7); x.fill();
+    x.fillStyle = "#3f9a58"; x.beginPath(); x.ellipse(1000, 720, 520, 200, 0, 0, 7); x.fill();
+    x.fillStyle = "#c98b4a"; x.fillRect(0, 650, 1200, 250);
+    x.fillStyle = "#b57839"; x.fillRect(0, 780, 1200, 120);
+    x.fillStyle = "#8a5a2b"; x.beginPath(); x.moveTo(20, 700); x.quadraticCurveTo(170, 430, 330, 700); x.fill();
+    // dump truck
+    x.fillStyle = "#7a4a22"; x.beginPath(); x.ellipse(610, 425, 170, 70, 0, 3.1416, 0); x.fill();
+    x.fillStyle = "#ffc21a"; x.beginPath(); x.moveTo(410, 420); x.lineTo(810, 420); x.lineTo(780, 600); x.lineTo(450, 600); x.closePath(); x.fill();
+    x.fillStyle = "#e39a00"; x.fillRect(410, 420, 400, 26);
+    x.fillStyle = "#ff8a1f"; x.beginPath(); x.moveTo(815, 600); x.lineTo(815, 470); x.lineTo(930, 470); x.lineTo(1000, 540); x.lineTo(1000, 600); x.closePath(); x.fill();
+    x.fillStyle = "#bfe9ff"; x.beginPath(); x.moveTo(840, 492); x.lineTo(920, 492); x.lineTo(965, 540); x.lineTo(840, 540); x.closePath(); x.fill();
+    x.fillStyle = "#2c3440"; x.fillRect(420, 600, 590, 44);
+    [[520, 670], [660, 670], [915, 670]].forEach(function (w) {
+      x.fillStyle = "#1f242c"; x.beginPath(); x.arc(w[0], w[1], 66, 0, 7); x.fill();
+      x.fillStyle = "#aab4c0"; x.beginPath(); x.arc(w[0], w[1], 26, 0, 7); x.fill();
+    });
+    // cones
+    [[1080, 800], [1140, 840]].forEach(function (p) {
+      x.fillStyle = "#ff5a1f"; x.beginPath(); x.moveTo(p[0], p[1] - 90); x.lineTo(p[0] + 34, p[1]); x.lineTo(p[0] - 34, p[1]); x.closePath(); x.fill();
+      x.fillStyle = "#fff"; x.fillRect(p[0] - 19, p[1] - 48, 38, 14);
+    });
+    return c;
+  }
+
+  /* ---------- setup screen ---------- */
+  var src = null, styled = {}, token = 0, busyN = 0;
+  function busy(on) { busyN += on ? 1 : -1; if (busyN < 0) busyN = 0; $("busy").hidden = busyN === 0; }
+  function say(t) { $("msg").textContent = t || ""; $("msg").hidden = !t; }
+
+  function setSource(drawable, w, h) {
+    var a = w / h, sx = 0, sy = 0, sw = w, sh = h;
+    if (a > 1.6) { sw = h * 1.6; sx = (w - sw) / 2; } else if (a < .62) { sh = w / .62; sy = (h - sh) / 2; }
+    var k = Math.min(1, WORK_MAX / Math.max(sw, sh));
+    src = mk(sw * k, sh * k);
+    var x = src.getContext("2d"); x.imageSmoothingQuality = "high";
+    x.drawImage(drawable, sx, sy, sw, sh, 0, 0, src.width, src.height);
+    styled = { photo: src }; token++;
+    selectStyle(prefs.style);
+    makeThumbs(token);
+  }
+  function drawPreview() {
+    var c = styled[prefs.style] || src, p = $("preview");
+    p.width = c.width; p.height = c.height; p.getContext("2d").drawImage(c, 0, 0);
+  }
+  function selectStyle(id) {
+    prefs.style = id; save();
+    Array.prototype.forEach.call($("styles").children, function (b) { b.setAttribute("aria-pressed", b.dataset.id === id ? "true" : "false"); });
+    if (styled[id]) { drawPreview(); return; }
+    var t = token; busy(true);
+    setTimeout(function () {
+      if (t === token) { try { styled[id] = FILTERS[id](src); } catch (e) { styled[id] = src; } if (prefs.style === id) drawPreview(); }
+      busy(false);
+    }, 40);
+  }
+  function makeThumbs(t) {
+    var small = scaled(src, 150), i = 0;
+    (function next() {
+      if (t !== token || i >= STYLES.length) return;
+      var id = STYLES[i][0], cv = $("styles").children[i].firstChild, out;
+      try { out = FILTERS[id](small); } catch (e) { out = small; }
+      // crop to the thumb's shape
+      var tw = 152, th = 120; cv.width = tw; cv.height = th;
+      var s = Math.max(tw / out.width, th / out.height);
+      cv.getContext("2d").drawImage(out, (tw - out.width * s) / 2, (th - out.height * s) / 2, out.width * s, out.height * s);
+      i++; setTimeout(next, 20);
+    })();
+  }
+
+  STYLES.forEach(function (s) {
+    var b = document.createElement("button"); b.type = "button"; b.className = "style"; b.dataset.id = s[0];
+    b.appendChild(document.createElement("canvas")); b.appendChild(document.createTextNode(s[1]));
+    b.addEventListener("click", function () { selectStyle(s[0]); });
+    $("styles").appendChild(b);
+  });
+  COUNTS.forEach(function (n) {
+    var b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = n;
+    b.setAttribute("aria-pressed", n === prefs.pieces ? "true" : "false");
+    b.addEventListener("click", function () {
+      prefs.pieces = n; save();
+      Array.prototype.forEach.call($("chips").children, function (c) { c.setAttribute("aria-pressed", c === b ? "true" : "false"); });
+    });
+    $("chips").appendChild(b);
+  });
+
+  $("file").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0]; if (!f) return;
+    say(""); var url = URL.createObjectURL(f), im = new Image();
+    im.onload = function () { setSource(im, im.naturalWidth, im.naturalHeight); URL.revokeObjectURL(url); };
+    im.onerror = function () { URL.revokeObjectURL(url); say("That file did not open as a picture. Try a JPEG or PNG photo."); };
+    im.src = url; e.target.value = "";
+  });
+  $("sample").addEventListener("click", function () { say(""); var s = drawSample(); setSource(s, s.width, s.height); });
+
+  /* ---------- sound ---------- */
+  var AC = null;
+  function audio() {
+    if (!AC) {
+      try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+      var A = window.AudioContext || window.webkitAudioContext; if (!A) return null;
+      try { AC = new A(); } catch (e) { return null; }
+    }
+    if (AC.state === "suspended") { try { AC.resume(); } catch (e) {} }
+    return AC;
+  }
+  function tone(f, at, dur, vol, type) {
+    if (!prefs.sound) return; var ac = audio(); if (!ac) return;
+    var o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + at;
+    o.type = type || "sine"; o.frequency.value = f;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .015); g.gain.exponentialRampToValueAtTime(.0008, t + dur);
+    o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur + .05);
+  }
+  function sPick() { tone(420, 0, .07, .12, "triangle"); }
+  function sSnap() { tone(660, 0, .16, .22); tone(990, .09, .26, .2); }
+  function sWin() { [523, 659, 784, 1047, 784, 1047].forEach(function (f, i) { tone(f, i * .14, .34, .22, "triangle"); }); }
+  document.addEventListener("pointerdown", audio, { passive: true });
+
+  /* ---------- puzzle ---------- */
+  var stage = $("stage"), board = $("board"), ghost = $("ghost");
+  var G = null, pieces = [], drags = new Map(), zTop = 10, lastSize = "";
+  var hit = mk(1, 1).getContext("2d");
+  var TAB = [[-.07, .03, -.10, .07, -.12, .10], [-.20, .20, -.12, .28, 0, .28], [.12, .28, .20, .20, .12, .10], [.10, .07, .07, .03, .10, 0]];
+
+  function gridFor(n, a) {
+    var best = [n, 1], bd = 1e9;
+    for (var c = 1; c <= n; c++) if (n % c === 0) { var d = Math.abs(Math.log((c / (n / c)) / a)); if (d < bd) { bd = d; best = [c, n / c]; } }
+    return best;
+  }
+  function edge(p, A, B, S, s) {
+    if (s) {
+      var L = Math.hypot(B[0] - A[0], B[1] - A[1]), dx = (B[0] - A[0]) / L, dy = (B[1] - A[1]) / L, nx = dy, ny = -dx;
+      var mx = (A[0] + B[0]) / 2, my = (A[1] + B[1]) / 2;
+      var X = function (u, v) { return mx + dx * u * S + nx * v * S * s; }, Y = function (u, v) { return my + dy * u * S + ny * v * S * s; };
+      p.lineTo(X(-.10, 0), Y(-.10, 0));
+      TAB.forEach(function (t) { p.bezierCurveTo(X(t[0], t[1]), Y(t[0], t[1]), X(t[2], t[3]), Y(t[2], t[3]), X(t[4], t[5]), Y(t[4], t[5])); });
+    }
+    p.lineTo(B[0], B[1]);
+  }
+  function piecePath(m, cw, ch, S, sides) {
+    var p = new Path2D(), P = [[m, m], [m + cw, m], [m + cw, m + ch], [m, m + ch]];
+    p.moveTo(m, m);
+    for (var i = 0; i < 4; i++) edge(p, P[i], P[(i + 1) % 4], S, sides[i]);
+    p.closePath(); return p;
+  }
+
+  function newGame() {
+    var img = styled[prefs.style] || src, gr = gridFor(prefs.pieces, img.width / img.height), cols = gr[0], rows = gr[1], r, c;
+    var hT = [], vT = [];
+    for (r = 0; r < rows; r++) { hT.push([]); vT.push([]); for (c = 0; c < cols; c++) { hT[r].push(Math.random() < .5 ? 1 : -1); vT[r].push(Math.random() < .5 ? 1 : -1); } }
+    G = { img: img, cols: cols, rows: rows, hT: hT, vT: vT, placed: {}, nPlaced: 0, done: false };
+    render();
+  }
+
+  function render() {
+    var sw = stage.clientWidth, sh = stage.clientHeight, pad = 14, img = G.img, a = img.width / img.height;
+    lastSize = sw + "x" + sh;
+    var land = sw > sh * 1.15, maxW, maxH;
+    if (land) { maxW = sw * .58 - pad * 2; maxH = sh - pad * 2 - 8; } else { maxW = sw - pad * 2 - 8; maxH = sh * .58 - pad; }
+    var bw = maxW, bh = bw / a; if (bh > maxH) { bh = maxH; bw = bh * a; }
+    var bx = land ? pad + (maxW - bw) / 2 : (sw - bw) / 2, by = land ? (sh - bh) / 2 : pad + 4;
+    var tray = land ? { x: pad * 2 + maxW, y: pad, w: sw - pad * 3 - maxW, h: sh - pad * 2 }
+                    : { x: pad, y: by + bh + pad, w: sw - pad * 2, h: sh - (by + bh + pad) - pad };
+    var cw = bw / G.cols, ch = bh / G.rows, S = Math.min(cw, ch), m = Math.ceil(S * .32), pw = cw + 2 * m, ph = ch + 2 * m;
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    G.sw = sw; G.sh = sh; G.S = S; G.pw = pw; G.ph = ph; G.tray = tray;
+
+    board.style.left = bx + "px"; board.style.top = by + "px"; board.style.width = bw + "px"; board.style.height = bh + "px";
+    board.classList.toggle("done", G.done); board.classList.toggle("noguide", !prefs.guide);
+    ghost.width = Math.round(bw * dpr); ghost.height = Math.round(bh * dpr);
+    ghost.getContext("2d").drawImage(img, 0, 0, ghost.width, ghost.height);
+
+    pieces.forEach(function (p) { p.el.remove(); }); pieces = []; drags.clear(); zTop = 10;
+    for (var r = 0; r < G.rows; r++) for (var c = 0; c < G.cols; c++) {
+      var sides = [r === 0 ? 0 : -G.hT[r - 1][c], c === G.cols - 1 ? 0 : G.vT[r][c], r === G.rows - 1 ? 0 : G.hT[r][c], c === 0 ? 0 : -G.vT[r][c - 1]];
+      var el = mk(pw * dpr, ph * dpr); el.className = "piece"; el.style.width = pw + "px"; el.style.height = ph + "px";
+      var x = el.getContext("2d"), kx = el.width / pw, ky = el.height / ph; x.scale(kx, ky);
+      var path = piecePath(m, cw, ch, S, sides);
+      x.save(); x.clip(path); x.drawImage(img, 0, 0, img.width, img.height, m - c * cw, m - r * ch, bw, bh);
+      x.lineWidth = Math.max(2, S * .05); x.strokeStyle = "rgba(255,255,255,.35)"; x.translate(1, 1); x.stroke(path); x.restore();
+      x.lineWidth = 1.5; x.strokeStyle = "rgba(16,30,40,.6)"; x.stroke(path);
+      var id = r + "," + c, p = { id: id, el: el, path: path, tx: bx + c * cw - m, ty: by + r * ch - m, placed: !!G.placed[id], held: false, z: 1 };
+      if (p.placed) { p.x = p.tx; p.y = p.ty; } else scatter(p);
+      put(p); pieces.push(p);
+    }
+    // loose pieces go on the stage in random order
+    pieces.filter(function (p) { return !p.placed; }).sort(function () { return Math.random() - .5; })
+      .forEach(function (p) { p.z = ++zTop; p.el.style.zIndex = p.z; });
+    pieces.forEach(function (p) { if (p.placed) p.el.style.zIndex = 1; stage.appendChild(p.el); });
+    count();
+  }
+  function scatter(p) {
+    var t = G.tray;
+    p.x = t.w > G.pw ? t.x + Math.random() * (t.w - G.pw) : t.x + (t.w - G.pw) / 2;
+    p.y = t.h > G.ph ? t.y + Math.random() * (t.h - G.ph) : t.y + (t.h - G.ph) / 2;
+    p.x = clamp(p.x, -G.pw * .25, G.sw - G.pw * .75); p.y = clamp(p.y, -G.ph * .25, G.sh - G.ph * .75);
+  }
+  function put(p) { p.el.style.transform = "translate3d(" + p.x + "px," + p.y + "px,0)"; }
+  function count() { $("count").textContent = G.nPlaced + " / " + (G.cols * G.rows); }
+
+  function pick(px, py) {
+    var loose = pieces.filter(function (p) { return !p.placed && !p.held; }).sort(function (a, b) { return b.z - a.z; }), i;
+    for (i = 0; i < loose.length; i++) if (hit.isPointInPath(loose[i].path, px - loose[i].x, py - loose[i].y)) return loose[i];
+    var best = null, bd = G.S * .6;
+    for (i = 0; i < loose.length; i++) { var d = Math.hypot(px - loose[i].x - G.pw / 2, py - loose[i].y - G.ph / 2); if (d < bd) { bd = d; best = loose[i]; } }
+    return best;
+  }
+  function local(e) { var r = stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+
+  stage.addEventListener("pointerdown", function (e) {
+    if (!G || G.done || e.target.closest("#win")) return;
+    var q = local(e), p = pick(q[0], q[1]); if (!p) return;
+    e.preventDefault();
+    p.held = true; p.z = ++zTop; p.el.style.zIndex = p.z; p.el.classList.remove("snap"); p.el.classList.add("drag");
+    drags.set(e.pointerId, { p: p, dx: q[0] - p.x, dy: q[1] - p.y });
+    try { stage.setPointerCapture(e.pointerId); } catch (err) {}
+    sPick();
+  });
+  stage.addEventListener("pointermove", function (e) {
+    var d = drags.get(e.pointerId); if (!d) return;
+    var q = local(e);
+    d.p.x = clamp(q[0] - d.dx, -G.pw / 2, G.sw - G.pw / 2); d.p.y = clamp(q[1] - d.dy, -G.ph / 2, G.sh - G.ph / 2);
+    put(d.p);
+  });
+  function drop(e) {
+    var d = drags.get(e.pointerId); if (!d) return;
+    drags.delete(e.pointerId);
+    var p = d.p; p.held = false; p.el.classList.remove("drag");
+    var tol = Math.min(Math.max(24, G.S * .4), G.S * .62);
+    if (Math.hypot(p.x - p.tx, p.y - p.ty) <= tol) {
+      p.x = p.tx; p.y = p.ty; p.placed = true; p.el.classList.add("snap"); p.el.style.zIndex = 1; put(p);
+      G.placed[p.id] = true; G.nPlaced++; count();
+      if (G.nPlaced === G.cols * G.rows) win(); else sSnap();
+    }
+  }
+  stage.addEventListener("pointerup", drop);
+  stage.addEventListener("pointercancel", drop);
+
+  function win() {
+    G.done = true; sSnap();
+    setTimeout(function () { board.classList.add("done"); sWin(); confetti(); $("win").hidden = false; }, 250);
+  }
+  function confetti() {
+    if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    var c = $("confetti"), w = c.width = stage.clientWidth, h = c.height = stage.clientHeight, x = c.getContext("2d");
+    var cols = ["#ffc93c", "#ff7a59", "#fff8e8", "#6cc5f2", "#57b368"], P = [], t0 = performance.now();
+    for (var i = 0; i < 90; i++) P.push({ x: Math.random() * w, y: -Math.random() * h * .5, vx: (Math.random() - .5) * 2, vy: 2 + Math.random() * 3.5, s: 6 + Math.random() * 7, r: Math.random() * 6, c: cols[i % 5] });
+    (function f(now) {
+      x.clearRect(0, 0, w, h);
+      if (now - t0 > 3200 || !G || !G.done) return;
+      P.forEach(function (p) { p.x += p.vx; p.y += p.vy; p.r += .12; x.save(); x.translate(p.x, p.y); x.rotate(p.r); x.fillStyle = p.c; x.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2); x.restore(); });
+      requestAnimationFrame(f);
+    })(t0);
+  }
+
+  /* ---------- screens and buttons ---------- */
+  function show(play) {
+    $("setup").hidden = play; $("play").hidden = !play; $("win").hidden = true;
+    if (!play) { pieces.forEach(function (p) { p.el.remove(); }); pieces = []; G = null; }
+  }
+  function label() {
+    $("guide").textContent = prefs.guide ? "Guide on" : "Guide off";
+    $("sound").textContent = prefs.sound ? "Sound on" : "Sound off";
+  }
+  $("start").addEventListener("click", function () {
+    if (!src) return;
+    if (!styled[prefs.style]) { try { styled[prefs.style] = FILTERS[prefs.style](src); } catch (e) { styled[prefs.style] = src; } }
+    audio(); show(true); label(); newGame();
+  });
+  $("back").addEventListener("click", function () { show(false); });
+  $("newpic").addEventListener("click", function () { show(false); });
+  $("again").addEventListener("click", function () { $("win").hidden = true; newGame(); });
+  $("mix").addEventListener("click", function () {
+    if (!G || G.done) return;
+    pieces.forEach(function (p) { if (!p.placed && !p.held) { scatter(p); p.el.classList.add("snap"); put(p); } });
+  });
+  $("guide").addEventListener("click", function () { prefs.guide = !prefs.guide; save(); label(); board.classList.toggle("noguide", !prefs.guide); });
+  $("sound").addEventListener("click", function () { prefs.sound = !prefs.sound; save(); label(); if (prefs.sound) sSnap(); });
+
+  var rt = null;
+  function resized() {
+    if (!G) return;
+    clearTimeout(rt);
+    rt = setTimeout(function () { if (G && lastSize !== stage.clientWidth + "x" + stage.clientHeight && stage.clientWidth > 0) render(); }, 180);
+  }
+  if (window.ResizeObserver) new ResizeObserver(resized).observe(stage); else window.addEventListener("resize", resized);
+
+  // Offline play when the game is on the Home Screen. Some viewers refuse this: that is fine.
+  try { if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function () {}); } catch (e) {}
+
+  /* ---------- open with the sample picture ready ---------- */
+  var s0 = drawSample(); setSource(s0, s0.width, s0.height);
+})();
+</script>
+</body>
+</html>
